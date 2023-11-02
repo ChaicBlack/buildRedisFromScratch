@@ -178,6 +178,7 @@ static bool cmd_is(const std::string &word, const char *cmd) {
     return 0 == strcasecmp(word.c_str(), cmd);
 }
 
+//处理请求并生成响应,是try_one_request的主要功能
 static int32_t do_request(
     const uint8_t *req, uint32_t reqlen,
     uint32_t *rescode, uint8_t *res, uint32_t *reslen)
@@ -204,6 +205,8 @@ static int32_t do_request(
     return 0;
 }
 
+//这段代码是一个请求处理函数，用于逐步解析和处理请求，然后生成响应
+//主要功能在do_request里
 static bool try_one_request(Conn *conn) {
     // try to parse a request from the buffer
     if (conn->rbuf_size < 4) {
@@ -295,6 +298,7 @@ static void state_req(Conn *conn) {
     while (try_fill_buffer(conn)) {}
 }
 
+//刷新数据发送缓冲区
 static bool try_flush_buffer(Conn *conn) {
     ssize_t rv = 0;
     do {
