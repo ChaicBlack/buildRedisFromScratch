@@ -115,4 +115,47 @@ static void hm_help_resizing(HMap *hmap){
 	}
 }
 ```
+当表变得太满的时候，insertion子路径也会触发调整大小
+hm_insert和hm_start_resizing一起实现了哈希表的插入操作，并在需要时启动哈希表的调整大小操作，以确保哈希表维护在合适的负载因子下，以提高性能和避免过度填充。
+```c++
+const size_t k_max_load_factor = 8; //最大负载因子
+
+void hm_insert(HMap* hmap, HNode* node){
+	if(!hmap->ht1.tab){
+		h_init(&hmap->ht1, 4);
+	}
+	h_insert(&hmap->ht1, node);
+
+	if(!hmap->ht2.tab){
+		size_t load_factor = hmap->ht1.size / (hmap->ht1.mask + 1); //mask=n-1，mask+1也就是ht1.tab的容量
+		if(load_factor >= k_max_load_factor){
+			hm_start_resizing(hmap);
+		}
+	}
+	hm_help_resizing(hmap);
+}
+
+static void hm_start_resizing(HMap* hmap){
+	assert(hmap->ht2.tab == NULL);
+	hmap->ht2 = hmap->ht1; //将ht1的内容迁移到ht2中
+	h_init(&hmap->ht1, (hmap->ht1.mask + 1)*2); //然后将ht1初始化并扩充容量为原来两倍
+	hmap->resizing_pos = 0;
+}
+```
+然后就是将一个key在表中删除的操作，没啥需要注意的
+先在ht1里边找，找不到在ht2里边找。
+```c++
+HNode* hm_pop(HMap* hmap, HNode* key, bool (*cmp)(HNode*, HNode*)){
+	hm_help_resizing(hmap);
+	HNode** from = h_lookup(hmap->ht1, key, cmp);
+	if(from){
+		return h_detach(&hmap->ht1, from);	
+	}
+	from = h_lookup(hmap->ht2, key, cmp);
+	if(from){
+		return h_detach(&hmap->ht2, from);
+	}
+	return NULL;
+}
+```
 
