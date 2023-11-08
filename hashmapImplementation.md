@@ -158,4 +158,59 @@ HNode* hm_pop(HMap* hmap, HNode* key, bool (*cmp)(HNode*, HNode*)){
 	return NULL;
 }
 ```
+# 侵入式数据结构
+概念：1.它本身作为数据结构的一部分包含指向自身类型的指针。这就是所谓的"侵入性"，即数据结构的定义包含指向自身的指针（比如链表）。2.经常使用外部指针来操作已存在的数据结构。
+首先定义一个结构体Entry，注意Entry中有类型为HNode的参数，而HNode的结构中就包含指向HNode的指针
+```c++
+struct Entry{
+	struct HNode node;
+	std::string key;
+	std::string val;
+}
+```
+然后就是一个do_get函数（这段代码使用了相当多的类型转换）
+函数逻辑：首先得到key值并计算哈希值，然后再在哈希表中查找这个哈希值，找到了就将这个节点复制到res中
+```c++
+static struct{
+	HMap db;
+}g_data;
 
+static unit32_t do_get(
+std::vector<string> &cmp, uint8_t *res, uint32_t *reslen)
+{
+	Entry key;
+	key.key.swap(cmd[1]); //将key.key与cmd[1]交换
+	key.node.hcode = str_hash((uint8_t *)key.key.data(), key.key.size()); //计算key.key.data并得到哈希码
+
+	HNode *node = hm_lookup(&g_data.db, &key.node, &entry_eq);
+	if(!node){
+		return RES_NX;
+	}
+
+	const std::string &val = container_of(node, Entry, node)->val;
+	assert(val.size() <= k_max_msg);
+	memcpy(res, val.data(), val.size());
+	*reslen = (uint32_t)val.size();
+	return RES_OK;
+}
+
+//比较两个哈希表节点是否相等
+static bool entry_eq(HNode *lhs, HNode *rhs){
+	struct Entry *le = container_of(lhs, struct Entry, node);
+	struct Entry *re = container_of(rhs, struct Entry, node);
+	return lhs->hcode == rhs->hcode && le->key == re->key;
+}
+```
+注意：C++提供了好几种类型转换方法，分别是static/dynamic/const/reinterpret/c-style cast，除了最后两个都挺安全的，但是这里是用的是C-style转换。
+然后是一个宏：
+这是一个常见的C宏定义，通常用于实现在C结构体内包含其他结构体的情况下，从内部结构体指针获取包含它的外部结构体的指针。这通常在操作系统内核编程或底层数据结构中用于管理数据结构之间的嵌套关系。
+```c++
+#define container_of(ptr, type, member)({
+	const typeof( ((type *)0)->member)*__mptr = (ptr);
+	(type *)((char *)__mptr-offsetof(type,member));
+})
+//先是创建一个0指针，然后强制转换成(type*)，然后获得其中的member的信息
+//然后创建一个指向member类型的指针，将ptr赋值给它
+//然后使用offsetof宏来获取member在外部结构体type中的偏移量，转为char*并减去偏移量，再重新转换为type*类型
+```
+总的来说，这个宏允许你从内部结构体的指针找到包含它的外部结构体的指针，而不需要事先知道外部结构体的地址或结构。这在许多低级编程任务中非常有用，例如在操作系统内核中管理数据结构或在底层硬件编程中处理数据结构嵌套的情况。
